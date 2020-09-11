@@ -12,20 +12,43 @@ const REDIS_PORT = process.env.REDIS_PORT || 6379
 const client = redis.createClient(REDIS_PORT)
 
 async function getCollection(req, res, next) {
-    console.log('Fetching data')
-    const response = await fetch(`https://api.discogs.com/users/eckosneekz/collection/folders/0/releases?sort=added&sort_order=desc&token=${process.env.NODE_APP_API_KEY}`)
-
-    const data = await response.json()
+    try {
+        console.log('Fetching data')
+        const response = await fetch(`https://api.discogs.com/users/eckosneekz/collection/folders/0/releases?sort=added&sort_order=desc&token=${process.env.NODE_APP_API_KEY}`)
     
-    const collection = data.releases;
-    collection.map( data => {
-        console.log(data.basic_information)
+        const data = await response.json()
+        
+        const collection = data.releases
+        const collectionStr = JSON.stringify(data.releases);
+        
+        client.setex('collection', 3600, collectionStr)
 
-        res.send('my nodejs app');
+        res.send('node app');
+
+        collection.map( data => {
+            console.log(data.basic_information)
+        })
+    }
+   catch(err) {
+       console.log(err)
+       res.status(500)
+   }
+}
+
+// Cache middleware 
+function cache(req, res, next) {
+
+    client.get('collection', (err, data) => {
+        if(err) throw err;
+        if(data !== null)  {
+            res.send(data) 
+        } else {
+            next()
+        }
     })
 }
 
-app.get('/', getCollection)
+app.get('/', cache, getCollection)
 
 app.listen(5000, () => {
     console.log(`App is listening on port ${PORT}`)
